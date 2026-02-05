@@ -5,14 +5,25 @@ import shutil
 import zipfile
 from ftplib import FTP
 from pathlib import Path
+from pathlib import PureWindowsPath
 
 import requests
 
-CONFIG_PATH = os.path.join("config", "config.ini")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_PATH = os.path.join(BASE_DIR, "config", "config.ini")
+
+
+def resolve_path(base_dir, path_value):
+    if not path_value:
+        return path_value
+    expanded = os.path.expanduser(path_value)
+    if os.path.isabs(expanded) or PureWindowsPath(expanded).is_absolute():
+        return expanded
+    return os.path.normpath(os.path.join(base_dir, expanded))
 
 
 def load_config():
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(interpolation=None)
     config.read(CONFIG_PATH)
     ftp_ip = config.get("XBOX", "ip", fallback="192.168.1.247")
     ftp_port = config.getint("XBOX", "ftp_port", fallback=21)
@@ -26,6 +37,9 @@ def load_config():
         "game_links",
         fallback=os.path.join("config", "game_links.json"),
     )
+    staging_dir = resolve_path(BASE_DIR, staging_dir)
+    temp_dir = resolve_path(BASE_DIR, temp_dir)
+    game_links_path = resolve_path(BASE_DIR, game_links_path)
     notify_endpoint = config.get("XBOX", "notify_endpoint", fallback="").strip()
     return {
         "ftp_ip": ftp_ip,

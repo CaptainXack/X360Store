@@ -3,15 +3,26 @@ import json
 import os
 import time  # For time intervals
 from urllib.parse import urljoin
+from pathlib import PureWindowsPath
 
 import requests
 from bs4 import BeautifulSoup
 
-CONFIG_PATH = os.path.join("config", "config.ini")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_PATH = os.path.join(BASE_DIR, "config", "config.ini")
+
+
+def resolve_path(base_dir, path_value):
+    if not path_value:
+        return path_value
+    expanded = os.path.expanduser(path_value)
+    if os.path.isabs(expanded) or PureWindowsPath(expanded).is_absolute():
+        return expanded
+    return os.path.normpath(os.path.join(base_dir, expanded))
 
 
 def load_config():
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(interpolation=None)
     config.read(CONFIG_PATH)
     source_url = config.get(
         "SCRAPER",
@@ -23,6 +34,7 @@ def load_config():
         "game_links",
         fallback=os.path.join("config", "game_links.json"),
     )
+    game_links_path = resolve_path(BASE_DIR, game_links_path)
     update_interval_hours = config.getint("SCRAPER", "update_interval_hours", fallback=24)
     allowed_regions_raw = config.get(
         "SCRAPER",

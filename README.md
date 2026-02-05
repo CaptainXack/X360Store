@@ -54,7 +54,7 @@ C:.
 
 1. **`config`**: Contains configuration files for the FTP server and game metadata.
 
-   * **`config.ini`**: Contains the FTP settings (Xbox IP, credentials) and other configuration parameters for the game catalog.
+   * **`config.ini`**: Contains the FTP settings (Xbox IP, credentials), PC paths, and scraper settings (source URL, allowed regions, update interval).
    * **`game_links.json`**: Stores the metadata of the games available for download, including URLs, titles, and regions.
 
 2. **`extractors`**: Contains the tools used for extracting game ISO files.
@@ -66,7 +66,7 @@ C:.
 3. **`scripts`**: Contains the automation scripts.
 
    * **`scraper.py`**: Script that scrapes game URLs and updates **`game_links.json`**.
-   * **`worker.py`**: Main automation script that handles the process of downloading, extracting, renaming, and uploading the game to the Xbox 360.
+   * **`worker.py`**: Main automation script that handles the process of downloading, extracting, renaming, and uploading the game to the Xbox 360 (reads settings from `config.ini`).
 
 4. **`staging`**: Temporary folder used for downloading and testing the process.
 
@@ -118,7 +118,7 @@ C:.
 1. **Folder Setup**:
 
    * Ensure the directory structure is created as shown above.
-   * **`config.ini`** should be populated with your Xbox 360’s FTP details (IP address, username, password, and game destination folder).
+   * **`config.ini`** should be populated with your Xbox 360’s FTP details (IP address, username, password, and game destination folder), plus optional scraper settings.
    * **`game_links.json`** should contain the list of games you want to download, along with their download URLs.
 
 2. **Running the Scripts**:
@@ -150,4 +150,3 @@ This system automates the management of Xbox 360 games by handling the download,
 ---
 
 Let me know if you need any further adjustments or clarifications!
-

@@ -1,17 +1,73 @@
+import configparser
+import json
+import os
+import time  # For time intervals
+from urllib.parse import urljoin
+from pathlib import PureWindowsPath
+
 import requests
 from bs4 import BeautifulSoup
-import json
-from urllib.parse import urljoin
-import time  # For time intervals
 
-# Hardcoded URL and output filename
-GAME_URL = "https://myrient.erista.me/files/Redump/Microsoft%20-%20Xbox%20360/"  # Replace with your scraping source
-JSON_FILENAME = "C:\\X360Store\\config\\game_links.json"  # Absolute path to game_links.json
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_PATH = os.path.join(BASE_DIR, "config", "config.ini")
 
-def update_game_links():
+
+def resolve_path(base_dir, path_value):
+    if not path_value:
+        return path_value
+    expanded = os.path.expanduser(path_value)
+    if os.path.isabs(expanded) or PureWindowsPath(expanded).is_absolute():
+        return expanded
+    return os.path.normpath(os.path.join(base_dir, expanded))
+
+
+def load_config():
+    config = configparser.ConfigParser(interpolation=None)
+    config.read(CONFIG_PATH)
+    source_url = config.get(
+        "SCRAPER",
+        "source_url",
+        fallback="https://myrient.erista.me/files/Redump/Microsoft%20-%20Xbox%20360/",
+    )
+    game_links_path = config.get(
+        "PC",
+        "game_links",
+        fallback=os.path.join("config", "game_links.json"),
+    )
+    game_links_path = resolve_path(BASE_DIR, game_links_path)
+    update_interval_hours = config.getint("SCRAPER", "update_interval_hours", fallback=24)
+    allowed_regions_raw = config.get(
+        "SCRAPER",
+        "allowed_regions",
+        fallback="UK,Europe,Worldwide,World",
+    )
+    include_other_regions = config.getboolean(
+        "SCRAPER",
+        "include_other_regions",
+        fallback=False,
+    )
+    allowed_regions = {
+        region.strip().lower()
+        for region in allowed_regions_raw.split(",")
+        if region.strip()
+    }
+    return (
+        source_url,
+        game_links_path,
+        update_interval_hours,
+        allowed_regions,
+        include_other_regions,
+    )
+
+def update_game_links(
+    game_url,
+    json_filename,
+    allowed_regions,
+    include_other_regions,
+):
     try:
         # Load the existing game_links.json file if it exists
-        with open(JSON_FILENAME, "r", encoding='utf-8') as f:
+        with open(json_filename, "r", encoding="utf-8") as f:
             game_links = json.load(f)
 
     except (FileNotFoundError, json.JSONDecodeError):
@@ -19,7 +75,7 @@ def update_game_links():
         game_links = []
 
     # Scrape new game data
-    new_game_data = scrape_game_data(GAME_URL)
+    new_game_data = scrape_game_data(game_url, allowed_regions, include_other_regions)
 
     # Add new games to the list, checking if they already exist
     for game in new_game_data:
@@ -29,16 +85,26 @@ def update_game_links():
     # Write updated game links back to the same game_links.json file
     try:
         # Ensure the directory exists before writing the file
-        os.makedirs(os.path.dirname(JSON_FILENAME), exist_ok=True)
-        
-        with open(JSON_FILENAME, "w", encoding='utf-8') as f:
+        os.makedirs(os.path.dirname(json_filename), exist_ok=True)
+
+        with open(json_filename, "w", encoding="utf-8") as f:
             json.dump(game_links, f, ensure_ascii=False, indent=4)
-        print(f"Updated game links in '{JSON_FILENAME}'. Total games: {len(game_links)}")
+        print(f"Updated game links in '{json_filename}'. Total games: {len(game_links)}")
 
     except Exception as e:
         print(f"Error writing to file: {e}")
 
-def scrape_game_data(url):
+
+def matches_region(title, allowed_regions, include_other_regions):
+    if include_other_regions:
+        return True
+    lowered = title.lower()
+    return any(f"({region})" in lowered for region in allowed_regions) or any(
+        f", {region}" in lowered for region in allowed_regions
+    )
+
+
+def scrape_game_data(url, allowed_regions, include_other_regions):
     # Send GET request to the URL
     response = requests.get(url)
     
@@ -49,14 +115,18 @@ def scrape_game_data(url):
         # Find all <td> tags with the class "link"
         game_data = []
         for link in soup.find_all("a", href=True):
-            game_url = link["href"]
-            if "xbox" in game_url:  # Filter for Xbox-related links
-                game_info = {
-                    "title": link.text.strip(),
-                    "region": "Unknown",  # You can update this if regions are part of the data
-                    "href": game_url
-                }
-                game_data.append(game_info)
+            game_url = urljoin(url, link["href"])
+            title = link.text.strip()
+            if not title or title in {".", ".."}:
+                continue
+            if not matches_region(title, allowed_regions, include_other_regions):
+                continue
+            game_info = {
+                "title": title,
+                "region": "Unknown",
+                "href": game_url,
+            }
+            game_data.append(game_info)
 
         return game_data
     else:
@@ -64,7 +134,19 @@ def scrape_game_data(url):
         return []
 
 if __name__ == "__main__":
+    (
+        game_url,
+        json_filename,
+        update_interval_hours,
+        allowed_regions,
+        include_other_regions,
+    ) = load_config()
     while True:  # Infinite loop to keep running the scraper
-        update_game_links()
-        time.sleep(86400)  # Wait for 24 hours (86400 seconds) before running again
+        update_game_links(
+            game_url,
+            json_filename,
+            allowed_regions,
+            include_other_regions,
+        )
+        time.sleep(update_interval_hours * 3600)
 
